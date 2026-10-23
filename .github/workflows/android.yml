@@ -1,0 +1,46 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tools/verify.cjs
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: gradle :app:assembleDebug :app:lintDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Spodium-On-Android
+          path: app/build/outputs/apk/debug/app-debug.apk
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Spodium-On-Android
+      - name: Publish installable test APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" app-debug.apk --title "Spodium On $RELEASE_TAG" --notes "Android 체험용 APK. 경기·혼잡도·주문·예약은 시연 데이터입니다. 테스트 서명으로 빌드되며 스토어 배포용이 아닙니다. 빌드마다 서명이 바뀔 수 있어 이전 앱 삭제 후 설치가 필요할 수 있습니다."
